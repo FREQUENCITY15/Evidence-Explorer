@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project Mentor</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Local Python codebase guide</p>
+      <h1>Project Mentor</h1>
+    </div>
+    <span class="phase-badge">Phase 6 · v0.7.0</span>
+  </header>
+
+  <nav class="view-tabs" aria-label="Project Mentor views">
+    <button id="map-tab" class="tab active" type="button" aria-controls="results">Map</button>
+    <button id="teach-tab" class="tab" type="button" disabled aria-controls="teach-view">Teach</button>
+    <button id="debug-tab" class="tab" type="button" disabled aria-controls="debug-view">Debug</button>
+    <button class="tab" type="button" disabled title="Planned for a later milestone">Govern</button>
+  </nav>
+
+  <main>
+    <section class="panel scanner-panel">
+      <div>
+        <p class="section-label">Repository</p>
+        <h2>Choose a Python project to understand</h2>
+        <p class="muted">The scan stays on this computer and never modifies the selected project.</p>
+      </div>
+
+      <form id="scan-form">
+        <label for="project-path">Project folder</label>
+        <div class="path-row">
+          <input
+            id="project-path"
+            name="project-path"
+            type="text"
+            placeholder="C:\CodeProjects\MyPythonProject"
+            autocomplete="off"
+            required
+          >
+          <button id="browse-button" class="secondary" type="button">Browse</button>
+          <button id="scan-button" class="primary" type="submit">Scan project</button>
+        </div>
+      </form>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="panel ollama-panel" aria-labelledby="ollama-heading">
+      <div class="ollama-heading-row">
+        <div>
+          <p class="section-label">Optional local AI</p>
+          <h2 id="ollama-heading">Ollama connection</h2>
+        </div>
+        <span id="ollama-connection-badge" class="connection-badge checking">Checking…</span>
+      </div>
+      <div class="ollama-controls">
+        <div>
+          <span class="field-label">Endpoint</span>
+          <code id="ollama-endpoint">http://127.0.0.1:11434</code>
+        </div>
+        <label for="ollama-model-select">
+          Installed model
+          <select id="ollama-model-select" disabled>
+            <option value="">Checking Ollama…</option>
+          </select>
+        </label>
+        <button id="ollama-refresh-button" class="secondary" type="button">Retry / refresh</button>
+      </div>
+      <p id="ollama-guidance" class="helper-text" role="status" aria-live="polite">Deterministic scanning remains available whether Ollama is running or not.</p>
+    </section>
+
+    <section id="results" class="results hidden" aria-live="polite">
+      <div class="result-heading">
+        <div>
+          <p class="section-label">Project map</p>
+          <h2 id="result-root">Scan results</h2>
+        </div>
+        <div class="result-actions">
+          <p id="summary-description" class="muted"></p>
+          <button id="export-button" class="secondary" type="button">Export JSON</button>
+        </div>
+      </div>
+
+      <div id="summary-cards" class="summary-grid"></div>
+
+      <section class="panel">
+        <div class="file-heading">
+          <div>
+            <p class="section-label">Connections</p>
+            <h3>Local import map</h3>
+          </div>
+          <p class="graph-legend"><span></span> Arrow means “imports”</p>
+        </div>
+        <div id="import-graph" class="graph-container"></div>
+      </section>
+
+      <section class="panel trace-panel">
+        <div class="file-heading">
+          <div>
+            <p class="section-label">Data-flow and error evidence</p>
+            <h3>Function evidence trace</h3>
+          </div>
+          <label class="trace-picker" for="trace-symbol-select">
+            Function or method
+            <select id="trace-symbol-select"></select>
+          </label>
+        </div>
+        <p class="helper-text trace-intro">Trace source-observed inputs, output sites, state writes, raises, and try paths alongside conservative data-flow and call-error evidence. Uncertain relationships remain explicitly labelled.</p>
+        <div id="function-trace"></div>
+      </section>
+
+      <section class="panel ai-panel" aria-labelledby="ai-heading">
+        <div class="file-heading">
+          <div>
+            <p class="section-label">Local-model interpretation</p>
+            <h3 id="ai-heading">Explain selected Map evidence</h3>
+          </div>
+          <span id="ai-selected-symbol" class="selected-evidence">Select a function above</span>
+        </div>
+        <p class="helper-text">The deterministic trace above remains the source of truth. Repository text is sent to the selected local model only as bounded, untrusted evidence.</p>
+        <label for="ai-question">Question for the local model</label>
+        <textarea id="ai-question" maxlength="2000" rows="3">Explain what this function does in beginner-friendly language, including important uncertainty.</textarea>
+        <div class="ai-actions">
+          <button id="ai-explain-button" class="primary" type="button" disabled>Explain selected evidence</button>
+          <span id="ai-status" class="status" role="status" aria-live="polite"></span>
+        </div>
+        <div id="ai-answer-panel" class="ai-answer hidden">
+          <div class="evidence-boundary-grid">
+            <section>
+              <h4>Observed deterministic facts</h4>
+              <p id="ai-observed-summary"></p>
+            </section>
+            <section>
+              <h4>Project Mentor inference</h4>
+              <p id="ai-inference-summary"></p>
+            </section>
+          </div>
+          <section class="model-interpretation">
+            <h4>Local-model interpretation</h4>
+            <p id="ai-model-label" class="helper-text"></p>
+            <pre id="ai-answer-text"></pre>
+            <p id="ai-grounding-warning" class="ai-warning hidden"></p>
+            <button id="ai-export-button" class="secondary" type="button" disabled>Export interpretation (.md)</button>
+          </section>
+          <section>
+            <h4>Validated evidence citations</h4>
+            <ul id="ai-citations" class="citation-list"></ul>
+          </section>
+          <p id="ai-context-notice" class="helper-text"></p>
+        </div>
+      </section>
+
+      <div class="two-column">
+        <section class="panel">
+          <p class="section-label">Start here</p>
+          <h3>Likely entry points</h3>
+          <div id="entry-points"></div>
+        </section>
+
+        <section class="panel">
+          <p class="section-label">Suggested route</p>
+          <h3>Learning order</h3>
+          <ol id="learning-order" class="learning-list"></ol>
+        </section>
+      </div>
+
+      <section class="panel">
+        <p class="section-label">Boundaries</p>
+        <h3>Static-analysis limitations</h3>
+        <ul id="analysis-warnings" class="warning-list"></ul>
+      </section>
+
+      <div class="two-column">
+        <section class="panel">
+          <p class="section-label">Packages</p>
+          <h3>External dependencies</h3>
+          <div id="external-dependencies"></div>
+        </section>
+
+        <section class="panel">
+          <p class="section-label">Review carefully</p>
+          <h3>Possibly unused files</h3>
+          <div id="unused-files"></div>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="file-heading">
+          <div>
+            <p class="section-label">Evidence</p>
+            <h3>Python files</h3>
+          </div>
+          <input id="file-filter" type="search" placeholder="Filter files">
+        </div>
+        <div id="file-list" class="file-list"></div>
+      </section>
+    </section>
+
+    <section id="teach-view" class="results hidden" aria-live="polite">
+      <div class="result-heading">
+        <div><p class="section-label">Deterministic Teach</p><h2>Learn from one scanned function or method</h2></div>
+        <p class="muted">Lessons, exercises, and quiz answers are built from trusted scan evidence before any optional model is used.</p>
+      </div>
+      <section class="panel teach-builder-panel">
+        <div class="file-heading">
+          <div><p class="section-label">Lesson target</p><h3>Choose source evidence</h3></div>
+          <label class="trace-picker" for="teach-symbol-select">Function or method<select id="teach-symbol-select" disabled></select></label>
+        </div>
+        <div class="ai-actions">
+          <button id="teach-build-button" class="primary" type="button" disabled>Build deterministic lesson</button>
+          <span id="teach-status" class="status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
+      <div id="teach-lesson" class="hidden">
+        <section class="panel teach-title-panel">
+          <div class="file-heading">
+            <div><p class="section-label">Deterministic lesson</p><h3 id="teach-lesson-title"></h3></div>
+            <div class="lesson-export-actions">
+              <button id="teach-export-markdown-button" class="secondary" type="button" disabled>Export readable lesson (.md)</button>
+              <button id="teach-export-json-button" class="secondary" type="button" disabled>Export full evidence (.json)</button>
+            </div>
+          </div>
+          <p id="teach-objective"></p><p id="teach-location" class="helper-text"></p>
+        </section>
+        <section class="panel"><p class="section-label">Read first</p><h3>Prerequisites</h3><div id="teach-prerequisites"></div></section>
+        <section class="panel"><p class="section-label">Follow the function</p><h3>Beginner walkthrough</h3><ol id="teach-stages" class="teach-stage-list"></ol></section>
+        <section class="panel"><p class="section-label">Source-backed explanation</p><h3>Beginner lesson</h3><div id="teach-sections" class="teach-section-list"></div></section>
+        <div class="two-column">
+          <section class="panel"><p class="section-label">Terms in this code</p><h3>Vocabulary</h3><div id="teach-vocabulary"></div></section>
+          <section class="panel"><p class="section-label">Try before revealing</p><h3>Predict what happens</h3><div id="teach-exercise"></div></section>
+        </div>
+        <section class="panel"><p class="section-label">Check your understanding</p><h3>Deterministic quiz</h3><div id="teach-quiz" class="teach-quiz"></div></section>
+        <section class="panel"><p class="section-label">Interpretation boundaries</p><h3>Uncertainty labels</h3><ul id="teach-uncertainty" class="warning-list"></ul></section>
+        <section class="panel evidence-inspector-panel">
+          <p class="section-label">Check the proof</p>
+          <h3>Expandable technical evidence</h3>
+          <p id="teach-evidence-summary" class="helper-text"></p>
+          <div id="teach-evidence-details" class="teach-evidence-groups"></div>
+        </section>
+        <section class="panel ai-panel" aria-labelledby="teach-ai-heading">
+          <div class="file-heading">
+            <div><p class="section-label">Optional local-model interpretation</p><h3 id="teach-ai-heading">Explain this deterministic lesson</h3></div>
+            <span id="teach-ai-selected-symbol" class="selected-evidence"></span>
+          </div>
+          <p class="helper-text">The model receives only the lesson's allow-listed evidence. It cannot change the exercise or quiz answers above.</p>
+          <label for="teach-ai-question">Question for the local model</label>
+          <textarea id="teach-ai-question" maxlength="2000" rows="3">Explain this lesson in beginner-friendly language and clearly identify static-analysis uncertainty.</textarea>
+          <div class="ai-actions">
+            <button id="teach-ai-explain-button" class="primary" type="button" disabled>Explain lesson evidence</button>
+            <span id="teach-ai-status" class="status" role="status" aria-live="polite"></span>
+          </div>
+          <div id="teach-ai-answer-panel" class="ai-answer hidden">
+            <section class="model-interpretation">
+              <h4>Local-model interpretation</h4><p id="teach-ai-model-label" class="helper-text"></p>
+              <pre id="teach-ai-answer-text"></pre><p id="teach-ai-grounding-warning" class="ai-warning hidden"></p>
+              <button id="teach-ai-export-button" class="secondary" type="button" disabled>Export interpretation (.md)</button>
+            </section>
+            <section><h4>Validated lesson-evidence citations</h4><ul id="teach-ai-citations" class="citation-list"></ul></section>
+            <p id="teach-ai-context-notice" class="helper-text"></p>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="debug-view" class="results hidden" aria-live="polite">
+      <div class="result-heading">
+        <div><p class="section-label">Deterministic Debug</p><h2>Investigate one observed failure</h2></div>
+        <p class="muted">Project Mentor ranks source-backed possibilities and proposes the cheapest useful manual observations. It does not run code, commands, or Ollama.</p>
+      </div>
+      <section class="panel debug-builder-panel">
+        <div class="file-heading">
+          <div><p class="section-label">Investigation target</p><h3>Describe the failure</h3></div>
+          <label class="trace-picker" for="debug-symbol-select">Function or method<select id="debug-symbol-select" disabled></select></label>
+        </div>
+        <label for="debug-failure-input">What happened, and what did you expect?</label>
+        <textarea id="debug-failure-input" maxlength="2000" rows="4" placeholder="Include the exact error message or unexpected result if you have it."></textarea>
+        <div class="ai-actions">
+          <button id="debug-build-button" class="primary" type="button" disabled>Build deterministic investigation</button>
+          <span id="debug-status" class="status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
+      <div id="debug-investigation" class="hidden">
+        <section class="panel debug-title-panel">
+          <div class="file-heading">
+            <div><p class="section-label">Investigation</p><h3 id="debug-investigation-title"></h3></div>
+            <div class="lesson-export-actions">
+              <button id="debug-export-markdown-button" class="secondary" type="button" disabled>Export readable investigation (.md)</button>
+              <button id="debug-export-json-button" class="secondary" type="button" disabled>Export full evidence (.json)</button>
+            </div>
+          </div>
+          <p id="debug-location" class="helper-text"></p>
+          <h4>Reported failure</h4><p id="debug-failure-statement"></p>
+          <p id="debug-boundary-notice" class="ai-warning"></p>
+        </section>
+        <section class="panel">
+          <p class="section-label">Competing explanations</p>
+          <h3>Ranked hypotheses</h3>
+          <div id="debug-hypotheses" class="debug-hypothesis-list"></div>
+        </section>
+        <section class="panel">
+          <p class="section-label">Test before fixing</p>
+          <h3>Cheapest useful observations</h3>
+          <ol id="debug-diagnostics" class="teach-stage-list"></ol>
+        </section>
+        <section class="panel evidence-inspector-panel">
+          <p class="section-label">Check the proof</p>
+          <h3>Expandable investigation evidence</h3>
+          <p id="debug-evidence-summary" class="helper-text"></p>
+          <div id="debug-evidence-details" class="teach-evidence-groups"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Project Mentor never imports or executes scanned code. Ollama output is optional interpretation and may be wrong; verify it against deterministic evidence.
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
