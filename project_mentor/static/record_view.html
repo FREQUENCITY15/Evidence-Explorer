@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evidence Explorer — Record</title>
+  <style>
+    :root { color-scheme: dark; --page:#111827; --panel:#1f2937; --muted:#9ca3af; --line:#374151; --text:#f9fafb; --pass:#065f46; --fail:#991b1b; --warn:#92400e; --unknown:#374151; --link:#93c5fd; }
+    * { box-sizing: border-box; }
+    body { margin:0; color:var(--text); background:var(--page); font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:1180px; margin:0 auto; padding:28px 18px 48px; }
+    h1 { margin:0 0 4px; font-size:1.7rem; } h2 { margin:0; font-size:1.1rem; } h3 { margin:0 0 8px; font-size:.95rem; color:#d1d5db; }
+    p { margin:.4rem 0; } .muted { color:var(--muted); }
+    .toolbar, .card, .notice { border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+    .toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; padding:14px; margin:20px 0; }
+    label { display:grid; gap:5px; color:#d1d5db; font-size:.9rem; } select, button { min-height:38px; border-radius:7px; border:1px solid #4b5563; padding:7px 10px; font:inherit; } select { min-width:min(520px,75vw); color:var(--text); background:#111827; } button { color:#111827; background:#bfdbfe; font-weight:650; cursor:pointer; } button:hover { background:#dbeafe; }
+    .notice { padding:16px; } .notice.error { border-color:#dc2626; background:#3f1519; }
+    .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); margin:14px 0; }
+    .card { padding:15px; } .value, pre { overflow-wrap:anywhere; white-space:pre-wrap; }
+    .value { font-weight:600; } pre { margin:0; padding:12px; color:#e5e7eb; background:#111827; border:1px solid var(--line); border-radius:7px; font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; }
+    .section { margin-top:18px; } .section > h2 { margin:0 0 9px; }
+    .badges { display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:9px; }
+    .badge { padding:10px; border-radius:8px; border:1px solid transparent; } .badge strong { display:block; font-size:.8rem; text-transform:uppercase; letter-spacing:.035em; } .badge span { display:block; margin-top:2px; overflow-wrap:anywhere; }
+    .pass { background:var(--pass); border-color:#059669; } .fail { background:var(--fail); border-color:#ef4444; } .warn { background:var(--warn); border-color:#f59e0b; } .unknown { background:var(--unknown); border-color:#6b7280; }
+    .list { margin:0; padding-left:20px; } .list li { overflow-wrap:anywhere; } .footer { margin-top:22px; color:var(--muted); font-size:.9rem; }
+    .hidden { display:none; }
+    @media (max-width:560px) { main { padding:18px 12px 32px; } select { min-width:100%; } .toolbar label { width:100%; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Evidence Explorer</h1>
+      <p class="muted">Read-only view of a canonical Agent-Tool-Evidence record.</p>
+    </header>
+
+    <div class="toolbar">
+      <label for="record-select">Available record
+        <select id="record-select" disabled><option>Loading records…</option></select>
+      </label>
+      <button id="load-button" type="button" disabled>Load record</button>
+    </div>
+
+    <div id="status" class="notice">Loading record index…</div>
+    <article id="record" class="hidden" aria-live="polite"></article>
+  </main>
+
+  <script>
+  (function () {
+    "use strict";
+
+    var select = document.getElementById("record-select");
+    var loadButton = document.getElementById("load-button");
+    var status = document.getElementById("status");
+    var recordRoot = document.getElementById("record");
+    var verdictNames = ["selection", "arguments", "protocol", "execution", "interpretation", "completion"];
+
+    function element(tag, className, text) {
+      var node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined && text !== null) node.textContent = String(text);
+      return node;
+    }
+
+    function valueAt(source, paths, fallback) {
+      for (var i = 0; i < paths.length; i += 1) {
+        var current = source;
+        var parts = paths[i].split(".");
+        for (var j = 0; j < parts.length && current != null; j += 1) current = current[parts[j]];
+        if (current !== undefined && current !== null && current !== "") return current;
+      }
+      return fallback === undefined ? null : fallback;
+    }
+
+    function display(value) {
+      if (value === null || value === undefined || value === "") return "Not observed";
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+      try { return JSON.stringify(value, null, 2); } catch (_) { return String(value); }
+    }
+
+    function jsonBlock(value) { return element("pre", "", display(value)); }
+    function section(title) { var root = element("section", "section"); root.appendChild(element("h2", "", title)); return root; }
+    function card(title, value) { var root = element("div", "card"); root.appendChild(element("h3", "", title)); root.appendChild(element("div", "value", display(value))); return root; }
+
+    function setStatus(message, isError) {
+      status.textContent = message;
+      status.className = isError ? "notice error" : "notice";
+      status.classList.remove("hidden");
+    }
+
+    function verdictText(verdict) {
+      if (verdict === null || verdict === undefined) return "Not observed";
+      if (typeof verdict !== "object") return String(verdict);
+      return display(valueAt(verdict, ["status", "verdict", "outcome", "determination", "result"], verdict));
+    }
+
+    function verdictClass(text) {
+      var lower = String(text).toLowerCase();
+      if (/pass|valid|success|compliant|accepted/.test(lower)) return "pass";
+      if (/fail|invalid|forbidden|error|reject|violation/.test(lower)) return "fail";
+      if (/flag|warn|incomplete|unknown|missing|not observed|uncertain/.test(lower)) return "warn";
+      return "unknown";
+    }
+
+    function appendList(parent, values) {
+      var list = element("ul", "list");
+      var items = Array.isArray(values) ? values : (values == null ? [] : [values]);
+      if (!items.length) items = ["None observed"];
+      items.forEach(function (item) { list.appendChild(element("li", "", display(item))); });
+      parent.appendChild(list);
+    }
+
+    function renderRecord(data, filename) {
+      var attemptId = valueAt(data, ["attemptId", "attempt.id", "metadata.id"], filename);
+      var model = valueAt(data, ["modelInteraction.modelName", "model.name", "metadata.model", "modelName"], null);
+      var host = valueAt(data, ["host.hostName", "host.name", "environment.host", "metadata.host"], null);
+      var timestamp = valueAt(data, ["recordedAt", "timestamp", "metadata.timestamp", "createdAt"], null);
+      var toolSurface = valueAt(data, ["toolSurface", "tool_surface"], {});
+      var interaction = valueAt(data, ["modelInteraction", "model_interaction"], {});
+      var execution = valueAt(data, ["execution"], {});
+      var verdicts = valueAt(data, ["verdicts"], {});
+
+      recordRoot.replaceChildren();
+      var overview = section("Attempt");
+      var overviewGrid = element("div", "grid");
+      overviewGrid.append(card("Attempt ID", attemptId));
+      overviewGrid.append(card("Model", model));
+      overviewGrid.append(card("Host", host));
+      overviewGrid.append(card("Timestamp", timestamp));
+      overview.appendChild(overviewGrid);
+      recordRoot.appendChild(overview);
+
+      var tools = section("Tools");
+      var toolsGrid = element("div", "grid");
+      [
+        ["Experimental", valueAt(toolSurface, ["effectiveExperimentalTools", "experimentalTools", "experimental"], [])],
+        ["Host-internal", valueAt(toolSurface, ["hostInternalTools", "host_internal"], [])],
+        ["Forbidden extra", valueAt(toolSurface, ["forbiddenExtraTools", "forbidden_extra"], [])]
+      ].forEach(function (entry) { var toolCard = element("div", "card"); toolCard.appendChild(element("h3", "", entry[0])); appendList(toolCard, entry[1]); toolsGrid.appendChild(toolCard); });
+      tools.appendChild(toolsGrid);
+      recordRoot.appendChild(tools);
+
+      var call = section("Call");
+      var callGrid = element("div", "grid");
+      callGrid.append(card("Selected tool", valueAt(interaction, ["selectedTool", "selectedToolName", "toolName", "firstToolCall.name"], valueAt(data, ["firstToolCall.name"], null))));
+      callGrid.append(card("Arguments", valueAt(interaction, ["arguments", "rawArguments", "firstToolCall.rawArgs"], valueAt(data, ["firstToolCall.rawArgs"], null))));
+      call.appendChild(callGrid);
+      recordRoot.appendChild(call);
+
+      var executionSection = section("Execution");
+      var executionGrid = element("div", "grid");
+      executionGrid.append(card("Protocol evidence", valueAt(data, ["protocolEvidence.details", "protocolEvidence.evidence", "protocolEvidence"], null)));
+      executionGrid.append(card("Execution result", valueAt(execution, ["result", "status", "details"], valueAt(data, ["firstToolCall.result"], null))));
+      executionSection.appendChild(executionGrid);
+      recordRoot.appendChild(executionSection);
+
+      var finalResponse = section("Final response");
+      finalResponse.appendChild(jsonBlock(valueAt(data, ["finalAnswer", "final_answer", "modelInteraction.finalAnswer"], null)));
+      recordRoot.appendChild(finalResponse);
+
+      var verdictSection = section("Verdicts");
+      var badges = element("div", "badges");
+      verdictNames.forEach(function (name) {
+        var verdict = verdicts && verdicts[name];
+        var text = verdictText(verdict);
+        var badge = element("div", "badge " + verdictClass(text));
+        badge.appendChild(element("strong", "", name));
+        badge.appendChild(element("span", "", text));
+        badges.appendChild(badge);
+      });
+      verdictSection.appendChild(badges);
+      recordRoot.appendChild(verdictSection);
+
+      var source = section("Source");
+      var sourceGrid = element("div", "grid");
+      sourceGrid.append(card("Record", valueAt(data, ["_sourcePath", "source.path", "provenance.recordPath"], "evidence/sample/" + filename + ".json")));
+      sourceGrid.append(card("Schema", valueAt(data, ["schemaVersion", "schema_version"], null)));
+      sourceGrid.append(card("Record checksum", valueAt(data, ["checksums.main_jsonl", "checksums.record", "provenance.checksum"], null)));
+      source.appendChild(sourceGrid);
+      recordRoot.appendChild(source);
+
+      recordRoot.appendChild(element("footer", "footer", "The source record is displayed read-only. Missing values are shown as “Not observed”."));
+      recordRoot.classList.remove("hidden");
+      status.classList.add("hidden");
+    }
+
+    function fetchJSON(url) {
+      return fetch(url, { headers: { "Accept": "application/json" } }).then(function (response) {
+        if (!response.ok) return response.json().catch(function () { return {}; }).then(function (body) { throw new Error(body.detail || ("Request failed (HTTP " + response.status + ")")); });
+        return response.json();
+      });
+    }
+
+    function filenameFromURL() {
+      var match = window.location.pathname.match(/^\/evidence\/([^/]+)$/);
+      try { return match ? decodeURIComponent(match[1]) : null; } catch (_) { return null; }
+    }
+
+    function loadRecord(filename, updateURL) {
+      if (!filename) return;
+      setStatus("Loading record…", false);
+      recordRoot.classList.add("hidden");
+      fetchJSON("/api/evidence/" + encodeURIComponent(filename)).then(function (data) {
+        renderRecord(data, filename);
+        select.value = filename;
+        if (updateURL) window.history.pushState({ filename: filename }, "", "/evidence/" + encodeURIComponent(filename));
+      }).catch(function (error) { setStatus("Failed to load record: " + error.message, true); });
+    }
+
+    function loadIndex() {
+      fetchJSON("/api/evidence/index").then(function (data) {
+        var records = Array.isArray(data.records) ? data.records : [];
+        select.replaceChildren();
+        if (!records.length) {
+          var empty = element("option", "", "No records available"); empty.value = ""; select.appendChild(empty); setStatus("No evidence records are available.", true); return;
+        }
+        var prompt = element("option", "", "— select a record —"); prompt.value = ""; select.appendChild(prompt);
+        records.forEach(function (filename) { var option = element("option", "", filename); option.value = filename; select.appendChild(option); });
+        select.disabled = false; loadButton.disabled = false;
+        var fromURL = filenameFromURL();
+        if (fromURL && records.indexOf(fromURL) !== -1) loadRecord(fromURL, false);
+        else setStatus("Select a record to view its evidence.", false);
+      }).catch(function (error) { setStatus("Failed to load record index: " + error.message, true); });
+    }
+
+    loadButton.addEventListener("click", function () { loadRecord(select.value, true); });
+    select.addEventListener("change", function () { if (select.value) loadRecord(select.value, true); });
+    window.addEventListener("popstate", function () { var filename = filenameFromURL(); if (filename) loadRecord(filename, false); });
+    loadIndex();
+  }());
+  </script>
+</body>
+</html>

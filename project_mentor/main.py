@@ -22,11 +22,14 @@ from project_mentor.debug_service import (
     DebugInvestigationError,
     DebugInvestigationService,
 )
+from project_mentor.evidence_loader import (
+    list_available_records,
+    load_evidence_record,
+)
 from project_mentor.ollama_client import OllamaClient
 from project_mentor.scanner import scan_project
 from project_mentor.scan_store import ScanStore
 from project_mentor.teach_service import TeachLessonError, TeachLessonService
-
 
 PACKAGE_DIRECTORY = Path(__file__).resolve().parent
 STATIC_DIRECTORY = PACKAGE_DIRECTORY / "static"
@@ -121,6 +124,27 @@ async def scan(payload: ScanRequest, response: Response) -> dict:
     response.headers["X-Project-Mentor-Scan-ID"] = SCAN_STORE.put(result)
     return result.to_dict()
 
+@app.get("/api/evidence/index")
+async def evidence_index() -> dict:
+    """Return the list of available evidence record filenames."""
+    return {"records": list_available_records()}
+
+
+@app.get("/api/evidence/{filename}")
+async def evidence_record(filename: str) -> dict:
+    """Return the full canonical evidence record as JSON."""
+    try:
+        return load_evidence_record(filename)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/evidence/{filename}", include_in_schema=False)
+async def evidence_view(filename: str) -> FileResponse:
+    """Serve the read-only record viewer page."""
+    return FileResponse(STATIC_DIRECTORY / "record_view.html")
 
 @app.get("/api/ollama/status")
 async def ollama_status() -> dict:
