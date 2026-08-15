@@ -13,7 +13,7 @@
     p { margin:.4rem 0; } .muted { color:var(--muted); }
     .toolbar, .card, .notice { border:1px solid var(--line); border-radius:10px; background:var(--panel); }
     .toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; padding:14px; margin:20px 0; }
-    label { display:grid; gap:5px; color:#d1d5db; font-size:.9rem; } select, button { min-height:38px; border-radius:7px; border:1px solid #4b5563; padding:7px 10px; font:inherit; } select { min-width:min(520px,75vw); color:var(--text); background:#111827; } button { color:#111827; background:#bfdbfe; font-weight:650; cursor:pointer; } button:hover { background:#dbeafe; }
+    label { display:grid; gap:5px; color:#d1d5db; font-size:.9rem; } select, input, button { min-height:38px; border-radius:7px; border:1px solid #4b5563; padding:7px 10px; font:inherit; } select, input { color:var(--text); background:#111827; } select { min-width:min(520px,75vw); } input[type="file"] { max-width:min(360px,75vw); } button { color:#111827; background:#bfdbfe; font-weight:650; cursor:pointer; } button:hover { background:#dbeafe; } button:disabled { cursor:not-allowed; opacity:.55; }
     .notice { padding:16px; } .notice.error { border-color:#dc2626; background:#3f1519; }
     .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); margin:14px 0; }
     .card { padding:15px; } .value, pre { overflow-wrap:anywhere; white-space:pre-wrap; }
@@ -48,9 +48,18 @@
       <button id="load-button" type="button" disabled>Load record</button>
       <button id="export-json-button" type="button" disabled>Export audit JSON</button>
       <button id="export-markdown-button" type="button" disabled>Export audit Markdown</button>
+      <label for="import-file">Import canonical JSON
+        <input id="import-file" type="file" accept="application/json,.json">
+      </label>
+      <button id="import-button" type="button" disabled>Validate and import</button>
+      <label for="raw-artifact-file">Raw artifact for checksum
+        <input id="raw-artifact-file" type="file">
+      </label>
+      <button id="verify-checksum-button" type="button" disabled>Verify SHA-256</button>
     </div>
 
     <div id="status" class="notice">Loading record index…</div>
+    <div id="checksum-status" class="notice hidden" aria-live="polite"></div>
     <article id="record" class="hidden" aria-live="polite"></article>
   </main>
 
@@ -62,8 +71,14 @@
     var loadButton = document.getElementById("load-button");
     var exportJsonButton = document.getElementById("export-json-button");
     var exportMarkdownButton = document.getElementById("export-markdown-button");
+    var importFile = document.getElementById("import-file");
+    var importButton = document.getElementById("import-button");
+    var rawArtifactFile = document.getElementById("raw-artifact-file");
+    var verifyChecksumButton = document.getElementById("verify-checksum-button");
     var status = document.getElementById("status");
+    var checksumStatus = document.getElementById("checksum-status");
     var recordRoot = document.getElementById("record");
+    var currentRecordId = null;
     var verdictNames = ["selection", "arguments", "protocol", "execution", "interpretation", "completion"];
 
     function element(tag, className, text) {
@@ -325,8 +340,10 @@
       status.classList.add("hidden");
     }
 
-    function fetchJSON(url) {
-      return fetch(url, { headers: { "Accept": "application/json" } }).then(function (response) {
+    function fetchJSON(url, options) {
+      var request = options || {};
+      request.headers = Object.assign({ "Accept": "application/json" }, request.headers || {});
+      return fetch(url, request).then(function (response) {
         if (!response.ok) return response.json().catch(function () { return {}; }).then(function (body) { throw new Error(body.detail || ("Request failed (HTTP " + response.status + ")")); });
         return response.json();
       });
@@ -339,6 +356,10 @@
 
     function loadRecord(filename, updateURL) {
       if (!filename) return;
+      currentRecordId = null;
+      rawArtifactFile.value = "";
+      checksumStatus.classList.add("hidden");
+      verifyChecksumButton.disabled = true;
       setStatus("Loading record…", false);
       recordRoot.classList.add("hidden");
       exportJsonButton.disabled = true;
@@ -347,6 +368,7 @@
         var data = payload && payload.record ? payload.record : payload;
         var validation = payload && payload.validation ? payload.validation : null;
         renderRecord(data, validation, filename);
+        currentRecordId = filename;
         select.value = filename;
         exportJsonButton.disabled = false;
         exportMarkdownButton.disabled = false;
@@ -366,7 +388,7 @@
       link.remove();
     }
 
-    function loadIndex() {
+    function loadIndex(preferredRecord) {
       fetchJSON("/api/evidence/index").then(function (data) {
         var records = Array.isArray(data.records) ? data.records : [];
         select.replaceChildren();
@@ -376,15 +398,75 @@
         var prompt = element("option", "", "— select a record —"); prompt.value = ""; select.appendChild(prompt);
         records.forEach(function (filename) { var option = element("option", "", filename); option.value = filename; select.appendChild(option); });
         select.disabled = false; loadButton.disabled = false;
-        var fromURL = filenameFromURL();
-        if (fromURL && records.indexOf(fromURL) !== -1) loadRecord(fromURL, false);
+        var fromURL = preferredRecord || filenameFromURL();
+        if (fromURL && records.indexOf(fromURL) !== -1) loadRecord(fromURL, Boolean(preferredRecord));
         else setStatus("Select a record to view its evidence.", false);
       }).catch(function (error) { setStatus("Failed to load record index: " + error.message, true); });
+    }
+
+    function importSelectedRecord() {
+      var file = importFile.files && importFile.files[0];
+      if (!file) return;
+      importButton.disabled = true;
+      setStatus("Validating and importing evidence…", false);
+      file.text().then(function (raw) {
+        var record;
+        try { record = JSON.parse(raw); }
+        catch (_) { throw new Error("Selected file does not contain valid JSON."); }
+        if (!record || Array.isArray(record) || typeof record !== "object") throw new Error("Selected evidence must be a JSON object.");
+        return fetchJSON("/api/evidence/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ record: record })
+        });
+      }).then(function (result) {
+        importFile.value = "";
+        loadIndex(result.recordId);
+      }).catch(function (error) {
+        setStatus("Import failed: " + error.message, true);
+      }).finally(function () {
+        importButton.disabled = !(importFile.files && importFile.files.length);
+      });
+    }
+
+    function updateChecksumButton() {
+      verifyChecksumButton.disabled = !(
+        currentRecordId && rawArtifactFile.files && rawArtifactFile.files.length
+      );
+    }
+
+    function verifySelectedArtifact() {
+      var file = rawArtifactFile.files && rawArtifactFile.files[0];
+      if (!currentRecordId || !file) return;
+      verifyChecksumButton.disabled = true;
+      checksumStatus.textContent = "Hashing the selected raw artifact locally…";
+      checksumStatus.className = "notice";
+      checksumStatus.classList.remove("hidden");
+      fetchJSON("/api/evidence/" + encodeURIComponent(currentRecordId) + "/verify-checksum", {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file
+      }).then(function (result) {
+        if (result.verified) {
+          checksumStatus.textContent = "Verified: supplied artifact matches the declared SHA-256 (" + result.byteCount + " bytes). The artifact was not retained.";
+          checksumStatus.className = "notice pass";
+        } else {
+          checksumStatus.textContent = "Mismatch: supplied artifact does not match the declared SHA-256. The artifact was not retained.";
+          checksumStatus.className = "notice error";
+        }
+      }).catch(function (error) {
+        checksumStatus.textContent = "Checksum verification failed: " + error.message;
+        checksumStatus.className = "notice error";
+      }).finally(updateChecksumButton);
     }
 
     loadButton.addEventListener("click", function () { loadRecord(select.value, true); });
     exportJsonButton.addEventListener("click", function () { downloadAudit("json"); });
     exportMarkdownButton.addEventListener("click", function () { downloadAudit("markdown"); });
+    importFile.addEventListener("change", function () { importButton.disabled = !(importFile.files && importFile.files.length); });
+    importButton.addEventListener("click", importSelectedRecord);
+    rawArtifactFile.addEventListener("change", updateChecksumButton);
+    verifyChecksumButton.addEventListener("click", verifySelectedArtifact);
     select.addEventListener("change", function () { if (select.value) loadRecord(select.value, true); });
     window.addEventListener("popstate", function () { var filename = filenameFromURL(); if (filename) loadRecord(filename, false); });
     loadIndex();

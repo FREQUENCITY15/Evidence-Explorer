@@ -66,6 +66,7 @@ class AuditExportTests(unittest.TestCase):
         self.assertIn("\n````\n", markdown)
         self.assertIn('"notes": "```\\n# injected heading', markdown)
         self.assertIn("Checksum verification is", markdown)
+        self.assertIn("not performed", markdown)
 
     def test_markdown_and_json_share_the_same_deterministic_governance(self) -> None:
         record = structured_record()

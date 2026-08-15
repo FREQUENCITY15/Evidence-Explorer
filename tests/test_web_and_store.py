@@ -12,6 +12,34 @@ from project_mentor.scanner import scan_project
 
 
 class WebAndStoreTests(unittest.TestCase):
+    def test_api_metadata_uses_the_pilot_identity_and_version(self) -> None:
+        with TestClient(app) as client:
+            health = client.get("/api/health")
+            schema = client.get("/openapi.json")
+
+        self.assertEqual(health.status_code, 200)
+        self.assertEqual(health.json()["version"], "0.8.0")
+        self.assertEqual(
+            schema.json()["info"]["title"],
+            "Evidence Explorer / Project Mentor",
+        )
+
+    def test_home_page_identifies_and_links_the_evidence_explorer_pilot(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        index = (project_root / "project_mentor" / "static" / "index.html").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "Evidence Explorer pilot · Project Mentor Phase 6 · v0.8.0",
+            index,
+        )
+        self.assertIn(
+            'href="/evidence/QWEN-VSCODE-MCP-ECHO-001"',
+            index,
+        )
+        self.assertNotIn(">Govern</button>", index)
+
     def test_scan_route_works_without_contacting_ollama(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

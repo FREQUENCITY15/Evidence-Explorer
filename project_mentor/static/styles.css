@@ -109,6 +109,15 @@ h3 {
   font-weight: 700;
 }
 
+.tab-link {
+  text-decoration: none;
+}
+
+.tab-link:hover,
+.tab-link:focus-visible {
+  color: var(--text);
+}
+
 .tab.active {
   color: var(--text);
 }

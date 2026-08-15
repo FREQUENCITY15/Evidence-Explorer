@@ -112,6 +112,30 @@ class RecordViewTests(unittest.TestCase):
         self.assertIn("/audit?export_format=", self.source)
         self.assertIn("link.download = filename +", self.source)
 
+    def test_import_is_explicit_validation_first_and_text_safe(self) -> None:
+        self.assertIn('id="import-file"', self.source)
+        self.assertIn('accept="application/json,.json"', self.source)
+        self.assertIn('id="import-button"', self.source)
+        self.assertIn("function importSelectedRecord()", self.source)
+        self.assertIn('JSON.parse(raw)', self.source)
+        self.assertIn('fetchJSON("/api/evidence/import"', self.source)
+        self.assertIn('method: "POST"', self.source)
+        self.assertIn('body: JSON.stringify({ record: record })', self.source)
+        self.assertIn('setStatus("Import failed: " + error.message, true)', self.source)
+        self.assertNotIn("innerHTML", self.source)
+
+    def test_checksum_verification_is_explicit_ephemeral_and_text_safe(self) -> None:
+        self.assertIn('id="raw-artifact-file"', self.source)
+        self.assertIn('id="verify-checksum-button"', self.source)
+        self.assertIn("function verifySelectedArtifact()", self.source)
+        self.assertIn('"/verify-checksum"', self.source)
+        self.assertIn('"Content-Type": "application/octet-stream"', self.source)
+        self.assertIn('body: file', self.source)
+        self.assertIn('result.verified', self.source)
+        self.assertIn('The artifact was not retained.', self.source)
+        self.assertIn('checksumStatus.textContent =', self.source)
+        self.assertNotIn("innerHTML", self.source)
+
 
 if __name__ == "__main__":
     unittest.main()
