@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0.0",
+  "attemptId": "TEST-VALID-001",
+  "toolSurface": {
+    "effectiveExperimentalTools": [],
+    "hostInternalTools": [],
+    "forbiddenExtraTools": []
+  },
+  "modelInteraction": {
+    "parsedToolName": "echo"
+  },
+  "execution": {
+    "successful": true
+  },
+  "verdicts": {
+    "selection": "valid",
+    "arguments": "valid",
+    "protocol": "valid",
+    "execution": "valid",
+    "interpretation": "valid",
+    "completion": "valid"
+  }
+}

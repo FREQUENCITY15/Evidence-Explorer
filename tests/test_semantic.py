@@ -207,7 +207,7 @@ def top():
             json.dumps(second, indent=2),
         )
         self.assertEqual(first["schema_version"], "1.3.0")
-        self.assertEqual(first["generator"]["version"], "0.7.0")
+        self.assertEqual(first["generator"]["version"], "0.8.0")
         self.assertIn("files", first["observed_facts"])
         self.assertIn("symbols", first["observed_facts"])
         self.assertIn("function_evidence", first["observed_facts"])

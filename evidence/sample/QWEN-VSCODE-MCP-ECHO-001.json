@@ -1,1 +1,120 @@
-../../../Agent-Tool-Evidence/evidence/records/QWEN-VSCODE-MCP-ECHO-001.json
+{
+  "schemaVersion": "1.0.0",
+  "experimentId": "QWEN-VSCODE-MCP-ECHO",
+  "attemptId": "QWEN-VSCODE-MCP-ECHO-001",
+  "recordedAt": "2026-07-24T12:56:46.927Z",
+  "localTimezone": "Australia/Brisbane",
+  "model": {
+    "providerId": null,
+    "name": "qwen3:14b",
+    "endpoint": null,
+    "temperature": null,
+    "thinkingMode": null
+  },
+  "task": {
+    "requestedTask": null,
+    "exactPrompt": "Use the echo tool exactly once with the message Boot Camp ping.\r\nReturn only the exact text produced by the tool.\r\nIf the tool call fails, return TOOL FAILED.",
+    "harnessInstructions": null,
+    "expectedAnswer": null
+  },
+  "server": {
+    "name": null,
+    "source": null,
+    "version": null,
+    "transport": null,
+    "capabilities": null,
+    "advertisedTools": [
+      "session_store_sql",
+      "mcp_everything_re_echo"
+    ],
+    "modelVisibleTools": [
+      "session_store_sql",
+      "mcp_everything_re_echo"
+    ]
+  },
+  "expectedToolSequence": [
+    "mcp_everything_re_echo"
+  ],
+  "toolSurface": {
+    "modelVisibleTools": [
+      {
+        "name": "session_store_sql",
+        "classification": "host_internal"
+      },
+      {
+        "name": "mcp_everything_re_echo",
+        "classification": "experimental"
+      }
+    ],
+    "effectiveExperimentalTools": [
+      "mcp_everything_re_echo"
+    ],
+    "hostInternalTools": [
+      "session_store_sql"
+    ],
+    "forbiddenExtraTools": [],
+    "counts": {
+      "experimental": 1,
+      "hostInternal": 1,
+      "forbiddenExtra": 0
+    },
+    "hostInternalBaseline": {
+      "identifier": "session_store_sql",
+      "checksum": "b7b64a1064e5e286a8595f518e55e23fdba43c3cb4a64937fe44fcec45ddd907"
+    },
+    "modelRequestedTools": [
+      {
+        "name": "mcp_everything_re_echo",
+        "classification": "experimental"
+      }
+    ],
+    "hostInvokedTools": [
+      {
+        "name": "mcp_everything_re_echo",
+        "classification": "experimental"
+      }
+    ]
+  },
+  "modelInteraction": {
+    "rawInitialOutput": "[{\"role\":\"assistant\",\"parts\":[{\"type\":\"tool_call\",\"id\":\"call_nnvcs9xj\",\"name\":\"mcp_everything_re_echo\",\"arguments\":\"{\\\"message\\\":\\\"Boot Camp ping\\\"}\"}]}]",
+    "parsedToolName": "mcp_everything_re_echo",
+    "rawArguments": "{\"message\":\"Boot Camp ping\"}",
+    "argumentsValid": true,
+    "validationErrors": [],
+    "resultReturnedToModel": "Echo: Boot Camp ping",
+    "finalAnswer": "Boot Camp ping"
+  },
+  "execution": {
+    "mcpRequestId": null,
+    "mcpResponseId": null,
+    "startedAt": "2026-07-24T12:57:00.271Z",
+    "endedAt": "2026-07-24T12:57:00.288Z",
+    "latencyMs": 17,
+    "successful": true,
+    "boundedToolResult": "Echo: Boot Camp ping",
+    "resultTruncated": false
+  },
+  "verdicts": {
+    "selection": "invalid_test",
+    "arguments": "pass",
+    "protocol": "pass",
+    "execution": "pass",
+    "interpretation": "fail",
+    "completion": "fail"
+  },
+  "overallOutcome": "invalid_test",
+  "failureCategory": "host_surface_drift",
+  "observations": [
+    "Host-internal tool definition drift detected for session_store_sql"
+  ],
+  "checksums": {
+    "main_jsonl": "2a2132d5d17481f2ec783319c50821398c674e153ada1f7c759c847f62bf9879",
+    "tools_0": "ea66f29e2d400ec9972b15f33c674a886f0d67776627cac41c3e4025ac8ba25f",
+    "system_prompt": "0f6e2f0f80acb11c252761150cdf1819aff8e4f3aabd1ae186607d9bd98ac6f6",
+    "mcp_configuration": "0759321e515e451e381dfa508dcb56f94252ca7dcaf9c2af98c56dfd2e48ef41",
+    "frozen_agent": "7dcea88c7595629206de383e26327b57db52ae6b1247aa70c4ec2bc80b838081",
+    "prompt": "33c82a5d53fe00a5754e80c18c6caabecbabb181a92bf91c2320ffe2bfbadbef",
+    "host_internal_baseline": "b7b64a1064e5e286a8595f518e55e23fdba43c3cb4a64937fe44fcec45ddd907"
+  },
+  "recommendedNextSingleVariableChange": "Inspect model post-processing of tool results"
+}

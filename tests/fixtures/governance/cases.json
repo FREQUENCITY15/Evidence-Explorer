@@ -1,0 +1,95 @@
+[
+  {
+    "name": "pass",
+    "overallOutcome": "pass",
+    "toolSurface": {
+      "effectiveExperimentalTools": ["echo"],
+      "hostInternalTools": [],
+      "forbiddenExtraTools": [],
+      "modelVisibleTools": [{"name": "echo", "classification": "experimental"}],
+      "hostInvokedTools": [{"name": "echo", "classification": "experimental"}]
+    },
+    "completenessGaps": [],
+    "expectedStatus": "green",
+    "expectedCodes": ["tool_policy_compliant"]
+  },
+  {
+    "name": "fail",
+    "overallOutcome": "fail",
+    "toolSurface": {
+      "effectiveExperimentalTools": ["echo"],
+      "hostInternalTools": [],
+      "forbiddenExtraTools": [],
+      "modelVisibleTools": [{"name": "echo", "classification": "experimental"}],
+      "hostInvokedTools": [{"name": "echo", "classification": "experimental"}]
+    },
+    "completenessGaps": [],
+    "expectedStatus": "green",
+    "expectedCodes": ["tool_policy_compliant"]
+  },
+  {
+    "name": "host-internal-visible",
+    "overallOutcome": "pass",
+    "toolSurface": {
+      "effectiveExperimentalTools": ["echo"],
+      "hostInternalTools": ["session_store"],
+      "forbiddenExtraTools": [],
+      "modelVisibleTools": [
+        {"name": "echo", "classification": "experimental"},
+        {"name": "session_store", "classification": "host_internal"}
+      ],
+      "hostInvokedTools": [{"name": "echo", "classification": "experimental"}]
+    },
+    "completenessGaps": [],
+    "expectedStatus": "amber",
+    "expectedCodes": ["host_internal_tool_visible"]
+  },
+  {
+    "name": "host-internal-invoked",
+    "overallOutcome": "fail",
+    "toolSurface": {
+      "effectiveExperimentalTools": ["echo"],
+      "hostInternalTools": ["session_store"],
+      "forbiddenExtraTools": [],
+      "modelVisibleTools": [
+        {"name": "echo", "classification": "experimental"},
+        {"name": "session_store", "classification": "host_internal"}
+      ],
+      "hostInvokedTools": [{"name": "session_store", "classification": "host_internal"}]
+    },
+    "completenessGaps": [],
+    "expectedStatus": "red",
+    "expectedCodes": ["host_internal_tool_invoked"]
+  },
+  {
+    "name": "forbidden-extra",
+    "overallOutcome": "fail",
+    "toolSurface": {
+      "effectiveExperimentalTools": ["echo"],
+      "hostInternalTools": [],
+      "forbiddenExtraTools": ["shell"],
+      "modelVisibleTools": [
+        {"name": "echo", "classification": "experimental"},
+        {"name": "shell", "classification": "forbidden_extra"}
+      ],
+      "hostInvokedTools": [{"name": "shell", "classification": "forbidden_extra"}]
+    },
+    "completenessGaps": [],
+    "expectedStatus": "red",
+    "expectedCodes": ["forbidden_tool_invoked"]
+  },
+  {
+    "name": "incomplete-evidence",
+    "overallOutcome": "unknown",
+    "toolSurface": {
+      "effectiveExperimentalTools": ["echo"],
+      "hostInternalTools": [],
+      "forbiddenExtraTools": [],
+      "modelVisibleTools": [{"name": "echo", "classification": "experimental"}],
+      "hostInvokedTools": []
+    },
+    "completenessGaps": ["missing:/execution/boundedToolResult"],
+    "expectedStatus": "flagged",
+    "expectedCodes": ["incomplete_evidence"]
+  }
+]

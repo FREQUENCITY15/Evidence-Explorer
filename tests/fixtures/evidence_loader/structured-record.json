@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "1.0.0",
+  "experimentId": "TEST-STRUCTURED",
+  "attemptId": "TEST-STRUCTURED-001",
+  "recordedAt": "2026-08-15T00:00:00Z",
+  "model": {
+    "name": "fixture-model"
+  },
+  "task": {
+    "exactPrompt": "Use the echo tool once."
+  },
+  "toolSurface": {
+    "effectiveExperimentalTools": [
+      "echo"
+    ],
+    "hostInternalTools": [],
+    "forbiddenExtraTools": []
+  },
+  "modelInteraction": {
+    "parsedToolName": "echo",
+    "rawArguments": "{\"message\":\"safe\"}",
+    "finalAnswer": "safe"
+  },
+  "execution": {
+    "successful": true,
+    "boundedToolResult": "safe"
+  },
+  "verdicts": {
+    "selection": {
+      "determination": "pass",
+      "category": "tool_selection",
+      "evidenceRefs": [
+        "#/modelInteraction/parsedToolName"
+      ],
+      "notes": "<img src=x onerror=window.__viewerXss=true>"
+    },
+    "arguments": {
+      "determination": "pass",
+      "evidenceRefs": [
+        "#/modelInteraction/rawArguments"
+      ]
+    },
+    "protocol": {
+      "determination": "pass",
+      "evidenceRefs": [
+        "#/execution/successful"
+      ]
+    },
+    "execution": {
+      "determination": "pass",
+      "evidenceRefs": [
+        "#/execution/boundedToolResult"
+      ]
+    },
+    "interpretation": {
+      "determination": "pass",
+      "evidenceRefs": [
+        "#/modelInteraction/finalAnswer"
+      ]
+    },
+    "completion": {
+      "determination": "pass",
+      "evidenceRefs": [
+        "#/overallOutcome"
+      ]
+    }
+  },
+  "overallOutcome": "pass",
+  "checksums": {
+    "main_jsonl": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

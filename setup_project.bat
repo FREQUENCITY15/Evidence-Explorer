@@ -8,7 +8,7 @@ if not exist ".venv\Scripts\python.exe" (
     if errorlevel 1 goto :error
 )
 
-echo Installing Project Mentor packages...
+echo Installing Evidence Explorer / Project Mentor packages...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip
 if errorlevel 1 goto :error
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt
@@ -16,6 +16,7 @@ if errorlevel 1 goto :error
 
 echo.
 echo Setup complete. Double-click start_project_mentor.bat to run the app.
+echo The Evidence Explorer pilot is available from the application home page.
 pause
 exit /b 0
 

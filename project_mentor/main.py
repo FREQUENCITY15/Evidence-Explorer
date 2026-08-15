@@ -1,10 +1,11 @@
-"""Loopback-only web application for Project Mentor Phase 6."""
+"""Loopback-only Evidence Explorer and Project Mentor application."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +17,12 @@ from project_mentor.ai_service import (
     GroundedAIService,
     select_default_model,
 )
+from project_mentor.audit_export import (
+    build_validation_payload,
+    render_audit_json,
+    render_audit_markdown,
+)
+from project_mentor import checksum_verification
 from project_mentor.config import Settings
 from project_mentor.context_builder import EvidenceContextBuilder
 from project_mentor.debug_service import (
@@ -25,6 +32,10 @@ from project_mentor.debug_service import (
 from project_mentor.evidence_loader import (
     list_available_records,
     load_evidence_record,
+)
+from project_mentor.evidence_import import (
+    EvidenceImportConflict,
+    import_evidence_record,
 )
 from project_mentor.ollama_client import OllamaClient
 from project_mentor.scanner import scan_project
@@ -45,8 +56,11 @@ TEACH_SERVICE = TeachLessonService()
 DEBUG_SERVICE = DebugInvestigationService()
 
 app = FastAPI(
-    title="Project Mentor",
-    description="Understand a Python repository using deterministic source analysis.",
+    title="Evidence Explorer / Project Mentor",
+    description=(
+        "Audit canonical agent-tool evidence and understand Python repositories "
+        "using deterministic analysis."
+    ),
     version=__version__,
 )
 app.mount("/static", StaticFiles(directory=STATIC_DIRECTORY), name="static")
@@ -77,6 +91,10 @@ class DebugInvestigationRequest(BaseModel):
     scan_id: str = Field(min_length=16, max_length=128)
     symbol_id: str = Field(min_length=1, max_length=1_000)
     failure_statement: str = Field(min_length=1, max_length=2_000)
+
+
+class EvidenceImportRequest(BaseModel):
+    record: dict[str, Any]
 
 
 @app.get("/", include_in_schema=False)
@@ -130,15 +148,105 @@ async def evidence_index() -> dict:
     return {"records": list_available_records()}
 
 
-@app.get("/api/evidence/{filename}")
-async def evidence_record(filename: str) -> dict:
-    """Return the full canonical evidence record as JSON."""
+@app.post("/api/evidence/import", status_code=201)
+async def evidence_import(payload: EvidenceImportRequest) -> dict:
+    """Validate and save a new canonical evidence record without overwriting."""
     try:
-        return load_evidence_record(filename)
+        result = await run_in_threadpool(import_evidence_record, payload.record)
+    except EvidenceImportConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "recordId": result.record_id,
+        "validation": result.validation,
+    }
+
+
+@app.get("/api/evidence/{filename}")
+async def evidence_record(filename: str, include_validation: bool = False) -> dict:
+    """Return a validated canonical record, optionally with audit metadata."""
+    try:
+        record = load_evidence_record(filename)
+        validation = build_validation_payload(record)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not include_validation:
+        return record
+    return {"record": record, "validation": validation}
+
+
+@app.post("/api/evidence/{filename}/verify-checksum")
+async def evidence_verify_checksum(filename: str, request: Request) -> dict:
+    """Compare a supplied raw artifact with the record's declared SHA-256."""
+    content_type = request.headers.get("content-type", "").partition(";")[0].strip()
+    if content_type != "application/octet-stream":
+        raise HTTPException(
+            status_code=415,
+            detail="Raw checksum verification requires application/octet-stream",
+        )
+
+    try:
+        record = load_evidence_record(filename)
+        build_validation_payload(record)
+        expected = checksum_verification.declared_main_jsonl_checksum(record)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    verifier = checksum_verification.ChecksumVerifier(
+        expected,
+        max_bytes=checksum_verification.MAX_RAW_ARTIFACT_BYTES,
+    )
+    try:
+        async for chunk in request.stream():
+            verifier.update(chunk)
+    except checksum_verification.ArtifactTooLarge as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+
+    result = verifier.finish()
+    return {
+        "status": result.status,
+        "verified": result.verified,
+        "algorithm": result.algorithm,
+        "expected": result.expected,
+        "actual": result.actual,
+        "byteCount": result.byte_count,
+        "retained": False,
+    }
+
+
+@app.get("/api/evidence/{filename}/audit")
+async def evidence_audit(
+    filename: str,
+    export_format: Literal["json", "markdown"] = "json",
+) -> Response:
+    """Download a deterministic audit artifact for one evidence record."""
+    try:
+        record = load_evidence_record(filename)
+        if export_format == "json":
+            content = render_audit_json(record)
+            extension = "json"
+            media_type = "application/json"
+        else:
+            content = render_audit_markdown(record)
+            extension = "md"
+            media_type = "text/markdown"
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    artifact_name = filename.removesuffix(".json") + f".audit.{extension}"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{artifact_name}"'},
+    )
 
 
 @app.get("/evidence/{filename}", include_in_schema=False)
