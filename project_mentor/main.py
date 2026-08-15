@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.concurrency import run_in_threadpool
@@ -15,6 +16,11 @@ from project_mentor.ai_service import (
     AIErrorCode,
     GroundedAIService,
     select_default_model,
+)
+from project_mentor.audit_export import (
+    build_validation_payload,
+    render_audit_json,
+    render_audit_markdown,
 )
 from project_mentor.config import Settings
 from project_mentor.context_builder import EvidenceContextBuilder
@@ -131,14 +137,48 @@ async def evidence_index() -> dict:
 
 
 @app.get("/api/evidence/{filename}")
-async def evidence_record(filename: str) -> dict:
-    """Return the full canonical evidence record as JSON."""
+async def evidence_record(filename: str, include_validation: bool = False) -> dict:
+    """Return a validated canonical record, optionally with audit metadata."""
     try:
-        return load_evidence_record(filename)
+        record = load_evidence_record(filename)
+        validation = build_validation_payload(record)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not include_validation:
+        return record
+    return {"record": record, "validation": validation}
+
+
+@app.get("/api/evidence/{filename}/audit")
+async def evidence_audit(
+    filename: str,
+    export_format: Literal["json", "markdown"] = "json",
+) -> Response:
+    """Download a deterministic audit artifact for one evidence record."""
+    try:
+        record = load_evidence_record(filename)
+        if export_format == "json":
+            content = render_audit_json(record)
+            extension = "json"
+            media_type = "application/json"
+        else:
+            content = render_audit_markdown(record)
+            extension = "md"
+            media_type = "text/markdown"
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    artifact_name = filename.removesuffix(".json") + f".audit.{extension}"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{artifact_name}"'},
+    )
 
 
 @app.get("/evidence/{filename}", include_in_schema=False)

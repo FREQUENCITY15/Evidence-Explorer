@@ -22,6 +22,13 @@
     .badges { display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:9px; }
     .badge { padding:10px; border-radius:8px; border:1px solid transparent; } .badge strong { display:block; font-size:.8rem; text-transform:uppercase; letter-spacing:.035em; } .badge span { display:block; margin-top:2px; overflow-wrap:anywhere; }
     .pass { background:var(--pass); border-color:#059669; } .fail { background:var(--fail); border-color:#ef4444; } .warn { background:var(--warn); border-color:#f59e0b; } .unknown { background:var(--unknown); border-color:#6b7280; }
+    .govern-banner { padding:15px; border:1px solid var(--line); border-radius:10px; } .govern-banner strong { display:block; font-size:1.05rem; text-transform:uppercase; letter-spacing:.04em; } .govern-green { background:var(--pass); border-color:#059669; } .govern-red { background:var(--fail); border-color:#ef4444; } .govern-amber, .govern-flagged { background:var(--warn); border-color:#f59e0b; } .govern-unscored { background:var(--unknown); border-color:#6b7280; }
+    .finding { margin-top:10px; } .finding .severity { color:var(--muted); font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.035em; }
+    .citation-links { display:grid; gap:4px; margin-top:8px; } .citation-links a { color:var(--link); font:12px/1.35 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; overflow-wrap:anywhere; }
+    .raw-wrap { overflow:auto; max-height:620px; border:1px solid var(--line); border-radius:7px; background:#111827; }
+    .raw-evidence { min-width:max-content; margin:0; padding:12px 12px 12px 58px; color:#e5e7eb; font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; }
+    .raw-evidence li { min-height:1.5em; padding:0 8px; white-space:pre; scroll-margin:18px; } .raw-evidence li::marker { color:#6b7280; }
+    .raw-evidence li.evidence-target { background:#1e3a5f; outline:1px solid var(--link); }
     .list { margin:0; padding-left:20px; } .list li { overflow-wrap:anywhere; } .footer { margin-top:22px; color:var(--muted); font-size:.9rem; }
     .hidden { display:none; }
     @media (max-width:560px) { main { padding:18px 12px 32px; } select { min-width:100%; } .toolbar label { width:100%; } }
@@ -39,6 +46,8 @@
         <select id="record-select" disabled><option>Loading records…</option></select>
       </label>
       <button id="load-button" type="button" disabled>Load record</button>
+      <button id="export-json-button" type="button" disabled>Export audit JSON</button>
+      <button id="export-markdown-button" type="button" disabled>Export audit Markdown</button>
     </div>
 
     <div id="status" class="notice">Loading record index…</div>
@@ -51,6 +60,8 @@
 
     var select = document.getElementById("record-select");
     var loadButton = document.getElementById("load-button");
+    var exportJsonButton = document.getElementById("export-json-button");
+    var exportMarkdownButton = document.getElementById("export-markdown-button");
     var status = document.getElementById("status");
     var recordRoot = document.getElementById("record");
     var verdictNames = ["selection", "arguments", "protocol", "execution", "interpretation", "completion"];
@@ -114,7 +125,86 @@
       parent.appendChild(list);
     }
 
-    function renderRecord(data, filename) {
+    function pointerToken(value) {
+      return String(value).replace(/~/g, "~0").replace(/\//g, "~1");
+    }
+
+    function pointerId(pointer) {
+      return "evidence-pointer-" + encodeURIComponent(pointer);
+    }
+
+    function buildRawLines(value, pointer, indent, prefix, trailingComma, lines) {
+      var padding = " ".repeat(indent);
+      var suffix = trailingComma ? "," : "";
+      if (Array.isArray(value)) {
+        lines.push({ text: padding + prefix + "[", pointer: pointer });
+        value.forEach(function (item, index) {
+          buildRawLines(item, pointer + "/" + index, indent + 2, "", index < value.length - 1, lines);
+        });
+        lines.push({ text: padding + "]" + suffix, pointer: null });
+        return;
+      }
+      if (value !== null && typeof value === "object") {
+        var keys = Object.keys(value);
+        lines.push({ text: padding + prefix + "{", pointer: pointer });
+        keys.forEach(function (key, index) {
+          buildRawLines(
+            value[key],
+            pointer + "/" + pointerToken(key),
+            indent + 2,
+            JSON.stringify(key) + ": ",
+            index < keys.length - 1,
+            lines
+          );
+        });
+        lines.push({ text: padding + "}" + suffix, pointer: null });
+        return;
+      }
+      lines.push({ text: padding + prefix + JSON.stringify(value) + suffix, pointer: pointer });
+    }
+
+    function rawEvidence(record) {
+      var lines = [];
+      buildRawLines(record, "#", 0, "", false, lines);
+      var wrapper = element("div", "raw-wrap");
+      var list = element("ol", "raw-evidence");
+      lines.forEach(function (line) {
+        var item = element("li", "", line.text);
+        if (line.pointer) {
+          item.id = pointerId(line.pointer);
+          item.dataset.pointer = line.pointer;
+          item.tabIndex = -1;
+        }
+        list.appendChild(item);
+      });
+      wrapper.appendChild(list);
+      return wrapper;
+    }
+
+    function appendCitations(parent, references) {
+      if (!Array.isArray(references) || !references.length) {
+        parent.appendChild(element("span", "muted", "No evidence citations"));
+        return;
+      }
+      var links = element("div", "citation-links");
+      references.forEach(function (reference) {
+        var link = element("a", "", reference);
+        link.href = "#" + pointerId(reference);
+        link.addEventListener("click", function (event) {
+          event.preventDefault();
+          var target = document.getElementById(pointerId(reference));
+          if (!target) return;
+          document.querySelectorAll(".evidence-target").forEach(function (node) { node.classList.remove("evidence-target"); });
+          target.classList.add("evidence-target");
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          target.focus({ preventScroll: true });
+        });
+        links.appendChild(link);
+      });
+      parent.appendChild(links);
+    }
+
+    function renderRecord(data, validation, filename) {
       var attemptId = valueAt(data, ["attemptId", "attempt.id", "metadata.id"], filename);
       var model = valueAt(data, ["modelInteraction.modelName", "model.name", "metadata.model", "modelName"], null);
       var host = valueAt(data, ["host.hostName", "host.name", "environment.host", "metadata.host"], null);
@@ -163,14 +253,55 @@
       finalResponse.appendChild(jsonBlock(valueAt(data, ["finalAnswer", "final_answer", "modelInteraction.finalAnswer"], null)));
       recordRoot.appendChild(finalResponse);
 
+      var governance = validation && validation.governance;
+      var govern = section("Govern");
+      if (governance) {
+        var governStatus = element("div", "govern-banner govern-" + governance.status);
+        governStatus.appendChild(element("strong", "", governance.status));
+        governStatus.appendChild(element("span", "", governance.summary));
+        governStatus.appendChild(element("span", "muted", governance.scoreable ? "Scored policy result" : "Not scoreable"));
+        govern.appendChild(governStatus);
+        (Array.isArray(governance.findings) ? governance.findings : []).forEach(function (finding) {
+          var findingCard = element("div", "card finding");
+          findingCard.appendChild(element("div", "severity", finding.severity));
+          findingCard.appendChild(element("h3", "", finding.code));
+          findingCard.appendChild(element("div", "", finding.message));
+          appendCitations(findingCard, finding.evidenceRefs);
+          govern.appendChild(findingCard);
+        });
+      } else {
+        govern.appendChild(element("div", "notice", "Governance evaluation is unavailable."));
+      }
+      recordRoot.appendChild(govern);
+
+      var quality = section("Evidence quality");
+      var qualityGrid = element("div", "grid");
+      qualityGrid.append(card("Canonical completeness", validation && validation.isComplete ? "Complete" : "Incomplete"));
+      qualityGrid.append(card("Schema validation", validation ? "Passed" : "Not available"));
+      quality.appendChild(qualityGrid);
+      var gapsCard = element("div", "card");
+      gapsCard.appendChild(element("h3", "", "Completeness gaps"));
+      appendList(gapsCard, validation && validation.completenessGaps);
+      quality.appendChild(gapsCard);
+      var warningsCard = element("div", "card");
+      warningsCard.appendChild(element("h3", "", "Warnings"));
+      appendList(warningsCard, validation && validation.warnings);
+      quality.appendChild(warningsCard);
+      recordRoot.appendChild(quality);
+
       var verdictSection = section("Verdicts");
       var badges = element("div", "badges");
       verdictNames.forEach(function (name) {
         var verdict = verdicts && verdicts[name];
-        var text = verdictText(verdict);
-        var badge = element("div", "badge " + verdictClass(text));
+        var normalized = validation && validation.verdicts && validation.verdicts[name];
+        var text = normalized ? normalized.determination : verdictText(verdict);
+        var classification = normalized ? normalized.classification : verdictClass(text);
+        var badge = element("div", "badge " + classification);
         badge.appendChild(element("strong", "", name));
         badge.appendChild(element("span", "", text));
+        if (normalized && normalized.category) badge.appendChild(element("span", "muted", normalized.category));
+        if (normalized && normalized.notes) badge.appendChild(element("span", "", normalized.notes));
+        appendCitations(badge, normalized && normalized.evidenceRefs);
         badges.appendChild(badge);
       });
       verdictSection.appendChild(badges);
@@ -183,6 +314,11 @@
       sourceGrid.append(card("Record checksum", valueAt(data, ["checksums.main_jsonl", "checksums.record", "provenance.checksum"], null)));
       source.appendChild(sourceGrid);
       recordRoot.appendChild(source);
+
+      var raw = section("Raw evidence");
+      raw.appendChild(element("p", "muted", "Line-numbered canonical JSON. Verdict citations navigate to stable in-record pointers."));
+      raw.appendChild(rawEvidence(data));
+      recordRoot.appendChild(raw);
 
       recordRoot.appendChild(element("footer", "footer", "The source record is displayed read-only. Missing values are shown as “Not observed”."));
       recordRoot.classList.remove("hidden");
@@ -205,11 +341,29 @@
       if (!filename) return;
       setStatus("Loading record…", false);
       recordRoot.classList.add("hidden");
-      fetchJSON("/api/evidence/" + encodeURIComponent(filename)).then(function (data) {
-        renderRecord(data, filename);
+      exportJsonButton.disabled = true;
+      exportMarkdownButton.disabled = true;
+      fetchJSON("/api/evidence/" + encodeURIComponent(filename) + "?include_validation=true").then(function (payload) {
+        var data = payload && payload.record ? payload.record : payload;
+        var validation = payload && payload.validation ? payload.validation : null;
+        renderRecord(data, validation, filename);
         select.value = filename;
+        exportJsonButton.disabled = false;
+        exportMarkdownButton.disabled = false;
         if (updateURL) window.history.pushState({ filename: filename }, "", "/evidence/" + encodeURIComponent(filename));
       }).catch(function (error) { setStatus("Failed to load record: " + error.message, true); });
+    }
+
+    function downloadAudit(exportFormat) {
+      var filename = select.value;
+      if (!filename || (exportFormat !== "json" && exportFormat !== "markdown")) return;
+      var extension = exportFormat === "json" ? "json" : "md";
+      var link = element("a", "", "");
+      link.href = "/api/evidence/" + encodeURIComponent(filename) + "/audit?export_format=" + exportFormat;
+      link.download = filename + ".audit." + extension;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     }
 
     function loadIndex() {
@@ -229,6 +383,8 @@
     }
 
     loadButton.addEventListener("click", function () { loadRecord(select.value, true); });
+    exportJsonButton.addEventListener("click", function () { downloadAudit("json"); });
+    exportMarkdownButton.addEventListener("click", function () { downloadAudit("markdown"); });
     select.addEventListener("change", function () { if (select.value) loadRecord(select.value, true); });
     window.addEventListener("popstate", function () { var filename = filenameFromURL(); if (filename) loadRecord(filename, false); });
     loadIndex();

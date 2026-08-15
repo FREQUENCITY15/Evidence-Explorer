@@ -61,6 +61,90 @@ class EvidenceLoaderTests(unittest.TestCase):
         self.assertIn("modelInteraction", data)
         self.assertIn("execution", data)
         self.assertEqual(data["schemaVersion"], "1.0.0")
+        self.assertNotIn("validation", data)
+
+    def test_validation_envelope_preserves_record_and_reports_gaps(self):
+        """The viewer can opt into normalized audit metadata without changing raw data."""
+        raw_response = self.client.get("/api/evidence/valid-record")
+        response = self.client.get(
+            "/api/evidence/valid-record?include_validation=true"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["record"], raw_response.json())
+        self.assertFalse(payload["validation"]["isComplete"])
+        self.assertIn(
+            "missing:/experimentId",
+            payload["validation"]["completenessGaps"],
+        )
+        self.assertEqual(
+            payload["validation"]["verdicts"]["selection"]["classification"],
+            "pass",
+        )
+        self.assertTrue(
+            payload["validation"]["verdicts"]["selection"]["legacy"]
+        )
+        self.assertEqual(
+            payload["validation"]["governance"]["status"],
+            "flagged",
+        )
+        self.assertFalse(payload["validation"]["governance"]["scoreable"])
+
+    def test_structured_verdict_citations_are_normalized_for_the_viewer(self):
+        """Resolvable record-local citations survive the API boundary."""
+        shutil.copyfile(
+            FIXTURES_DIR / "structured-record.json",
+            self.records_dir / "structured-record.json",
+        )
+
+        response = self.client.get(
+            "/api/evidence/structured-record?include_validation=true"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        verdict = response.json()["validation"]["verdicts"]["selection"]
+        self.assertEqual(verdict["evidenceRefs"], ["#/modelInteraction/parsedToolName"])
+        self.assertEqual(verdict["classification"], "pass")
+        self.assertFalse(verdict["legacy"])
+        self.assertEqual(
+            verdict["notes"],
+            "<img src=x onerror=window.__viewerXss=true>",
+        )
+        self.assertEqual(
+            response.json()["validation"]["governance"]["status"],
+            "green",
+        )
+
+    def test_invalid_schema_and_unresolved_citations_return_controlled_errors(self):
+        """Malformed canonical content is rejected after the safe file load."""
+        wrong_version = json.loads(
+            (FIXTURES_DIR / "valid-record.json").read_text(encoding="utf-8")
+        )
+        wrong_version["schemaVersion"] = "2.0.0"
+        (self.records_dir / "wrong-version.json").write_text(
+            json.dumps(wrong_version),
+            encoding="utf-8",
+        )
+        bad_reference = json.loads(
+            (FIXTURES_DIR / "valid-record.json").read_text(encoding="utf-8")
+        )
+        bad_reference["verdicts"]["selection"] = {
+            "determination": "pass",
+            "evidenceRefs": ["#/invented/evidence"],
+        }
+        (self.records_dir / "bad-reference.json").write_text(
+            json.dumps(bad_reference),
+            encoding="utf-8",
+        )
+
+        version_response = self.client.get("/api/evidence/wrong-version")
+        reference_response = self.client.get("/api/evidence/bad-reference")
+
+        self.assertEqual(version_response.status_code, 400)
+        self.assertIn("schemaVersion", version_response.json()["detail"])
+        self.assertEqual(reference_response.status_code, 400)
+        self.assertIn("does not resolve", reference_response.json()["detail"])
 
     def test_loader_accepts_json_filename_suffix(self):
         """The loader preserves support for a single .json suffix."""
@@ -169,6 +253,40 @@ class EvidenceLoaderTests(unittest.TestCase):
         response = self.client.get("/evidence/TEST-FILE")
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/html", response.headers.get("content-type", ""))
+
+    def test_json_audit_export_is_downloadable_and_round_trips(self):
+        """The lossless export is deterministic JSON with an attachment name."""
+        response = self.client.get(
+            "/api/evidence/valid-record/audit?export_format=json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/json", response.headers["content-type"])
+        self.assertEqual(
+            response.headers["content-disposition"],
+            'attachment; filename="valid-record.audit.json"',
+        )
+        payload = response.json()
+        self.assertEqual(payload["record"]["attemptId"], "TEST-VALID-001")
+        self.assertEqual(payload["validation"]["governance"]["status"], "flagged")
+        self.assertEqual(
+            payload["source"]["checksumVerification"],
+            "not_performed",
+        )
+
+    def test_markdown_audit_export_is_readable_and_rejects_unknown_format(self):
+        """Markdown is downloadable and the format allow-list is enforced."""
+        markdown_response = self.client.get(
+            "/api/evidence/valid-record/audit?export_format=markdown"
+        )
+        invalid_response = self.client.get(
+            "/api/evidence/valid-record/audit?export_format=html"
+        )
+
+        self.assertEqual(markdown_response.status_code, 200)
+        self.assertIn("text/markdown", markdown_response.headers["content-type"])
+        self.assertIn("# Evidence Explorer audit", markdown_response.text)
+        self.assertEqual(invalid_response.status_code, 422)
 
 
 if __name__ == "__main__":

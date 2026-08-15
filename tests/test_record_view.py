@@ -67,6 +67,51 @@ class RecordViewTests(unittest.TestCase):
             self.source,
         )
 
+    def test_viewer_requests_validation_without_changing_the_default_api(self) -> None:
+        self.assertIn("?include_validation=true", self.source)
+        self.assertIn("payload.record", self.source)
+        self.assertIn("payload.validation", self.source)
+        self.assertIn('section("Evidence quality")', self.source)
+        self.assertIn("validation.completenessGaps", self.source)
+        self.assertIn("validation.warnings", self.source)
+
+    def test_raw_evidence_has_line_and_pointer_targets(self) -> None:
+        self.assertIn('var list = element("ol", "raw-evidence")', self.source)
+        self.assertIn("item.id = pointerId(line.pointer)", self.source)
+        self.assertIn("item.dataset.pointer = line.pointer", self.source)
+        self.assertIn('buildRawLines(record, "#", 0, "", false, lines)', self.source)
+        self.assertIn('replace(/~/g, "~0").replace(/\\//g, "~1")', self.source)
+
+    def test_verdict_citations_navigate_to_safe_raw_evidence_nodes(self) -> None:
+        self.assertIn("normalized.evidenceRefs", self.source)
+        self.assertIn('link.href = "#" + pointerId(reference)', self.source)
+        self.assertIn("document.getElementById(pointerId(reference))", self.source)
+        self.assertIn("target.scrollIntoView", self.source)
+        self.assertIn('element("span", "", normalized.notes)', self.source)
+
+    def test_governance_result_renders_with_finding_citations(self) -> None:
+        self.assertIn('section("Govern")', self.source)
+        self.assertIn('"govern-banner govern-" + governance.status', self.source)
+        self.assertIn("governance.scoreable", self.source)
+        self.assertIn("governance.findings", self.source)
+        self.assertIn("finding.message", self.source)
+        self.assertIn("appendCitations(findingCard, finding.evidenceRefs)", self.source)
+
+    def test_audit_exports_are_explicitly_user_triggered(self) -> None:
+        self.assertIn('id="export-json-button"', self.source)
+        self.assertIn('id="export-markdown-button"', self.source)
+        self.assertIn("function downloadAudit(exportFormat)", self.source)
+        self.assertIn(
+            'exportJsonButton.addEventListener("click", function () { downloadAudit("json"); })',
+            self.source,
+        )
+        self.assertIn(
+            'exportMarkdownButton.addEventListener("click", function () { downloadAudit("markdown"); })',
+            self.source,
+        )
+        self.assertIn("/audit?export_format=", self.source)
+        self.assertIn("link.download = filename +", self.source)
+
 
 if __name__ == "__main__":
     unittest.main()
