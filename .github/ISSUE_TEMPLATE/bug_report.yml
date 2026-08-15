@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a reproducible Evidence Explorer problem using sanitized data.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve the public alpha. Do not include credentials, private transcripts, proprietary source, medical information, or other sensitive data. Report security issues privately through the repository Security page.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.8.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Use the smallest synthetic or sanitized example that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Paste only non-sensitive logs or screenshots.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, personal information, and proprietary evidence.
+          required: true
+        - label: This is not a private security vulnerability report.
+          required: true

@@ -1,0 +1,45 @@
+name: Evidence compatibility request
+description: Propose support for a canonical evidence shape or producer.
+title: "[Evidence]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the evidence producer and the decision a reviewer needs to make. Use synthetic examples only; do not upload real private agent traces.
+  - type: input
+    id: producer
+    attributes:
+      label: Evidence producer
+      placeholder: Agent framework, harness, or export format
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Reviewer decision
+      description: What should Evidence Explorer help a person determine?
+    validations:
+      required: true
+  - type: textarea
+    id: mapping
+    attributes:
+      label: Proposed canonical field mapping
+      description: Map producer fields to schema 1.0.0 using a synthetic example.
+    validations:
+      required: true
+  - type: textarea
+    id: gaps
+    attributes:
+      label: Missing or ambiguous evidence
+      description: Which required observations cannot be supplied reliably?
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: All examples are synthetic and contain no credentials or private data.
+          required: true
