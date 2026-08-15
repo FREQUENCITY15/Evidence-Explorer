@@ -67,13 +67,14 @@
         var current = source;
         var parts = paths[i].split(".");
         for (var j = 0; j < parts.length && current != null; j += 1) current = current[parts[j]];
-        if (current !== undefined && current !== null && current !== "") return current;
+        if (current !== undefined && current !== "") return current;
       }
       return fallback === undefined ? null : fallback;
     }
 
     function display(value) {
-      if (value === null || value === undefined || value === "") return "Not observed";
+      if (value === undefined || value === "") return "Not observed";
+      if (value === null) return "null";
       if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
       try { return JSON.stringify(value, null, 2); } catch (_) { return String(value); }
     }
@@ -95,10 +96,13 @@
     }
 
     function verdictClass(text) {
-      var lower = String(text).toLowerCase();
-      if (/pass|valid|success|compliant|accepted/.test(lower)) return "pass";
-      if (/fail|invalid|forbidden|error|reject|violation/.test(lower)) return "fail";
-      if (/flag|warn|incomplete|unknown|missing|not observed|uncertain/.test(lower)) return "warn";
+      var normalized = String(text).trim().toLowerCase();
+      var passVerdicts = ["pass", "valid", "success", "successful", "compliant", "accepted"];
+      var failVerdicts = ["fail", "failed", "invalid", "invalid_test", "forbidden", "error", "reject", "rejected", "violation"];
+      var warnVerdicts = ["flag", "flagged", "warn", "warning", "incomplete", "unknown", "missing", "not observed", "uncertain"];
+      if (passVerdicts.indexOf(normalized) !== -1) return "pass";
+      if (failVerdicts.indexOf(normalized) !== -1) return "fail";
+      if (warnVerdicts.indexOf(normalized) !== -1) return "warn";
       return "unknown";
     }
 
@@ -142,7 +146,7 @@
 
       var call = section("Call");
       var callGrid = element("div", "grid");
-      callGrid.append(card("Selected tool", valueAt(interaction, ["selectedTool", "selectedToolName", "toolName", "firstToolCall.name"], valueAt(data, ["firstToolCall.name"], null))));
+      callGrid.append(card("Selected tool", valueAt(interaction, ["parsedToolName", "selectedTool", "selectedToolName", "toolName", "firstToolCall.name"], valueAt(data, ["firstToolCall.name"], null))));
       callGrid.append(card("Arguments", valueAt(interaction, ["arguments", "rawArguments", "firstToolCall.rawArgs"], valueAt(data, ["firstToolCall.rawArgs"], null))));
       call.appendChild(callGrid);
       recordRoot.appendChild(call);
@@ -150,7 +154,8 @@
       var executionSection = section("Execution");
       var executionGrid = element("div", "grid");
       executionGrid.append(card("Protocol evidence", valueAt(data, ["protocolEvidence.details", "protocolEvidence.evidence", "protocolEvidence"], null)));
-      executionGrid.append(card("Execution result", valueAt(execution, ["result", "status", "details"], valueAt(data, ["firstToolCall.result"], null))));
+      executionGrid.append(card("Execution result", valueAt(execution, ["boundedToolResult", "result", "status", "details"], valueAt(data, ["firstToolCall.result"], null))));
+      executionGrid.append(card("Execution successful", valueAt(execution, ["successful"], null)));
       executionSection.appendChild(executionGrid);
       recordRoot.appendChild(executionSection);
 
