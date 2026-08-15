@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0 — Evidence Explorer public alpha — 2026-08-16
+
+- Added canonical Agent-Tool-Evidence schema `1.0.0` validation with explicit
+  completeness gaps, stable JSON Pointer citations, and null/false preservation.
+- Added deterministic Govern classifications that separate tool-policy
+  compliance from attempt reliability.
+- Added safe line-addressable raw evidence rendering and user-triggered,
+  byte-stable JSON and Markdown audit exports.
+- Added validation-first append-only evidence import with flat identifiers,
+  symlink protection, and a shared 1 MB record limit.
+- Added bounded, ephemeral SHA-256 verification for explicitly selected raw
+  artifacts without retaining their bytes or overstating audit assurance.
+- Added the Evidence Explorer browser workflow inside Project Mentor while
+  preserving Map, Teach, Debug, Phase 6 metadata, and existing schema contracts.
+- Added a repeatable public pilot walkthrough and cross-platform setup guidance.
+- Added GitHub Actions coverage on Python 3.12, 3.13, and 3.14.
+- Added Apache-2.0 licensing, security and contribution guidance, issue
+  templates, and public-alpha positioning.
+
 ## 0.7.0 — Phase 6 deterministic Debug investigation foundation — 2026-07-21
 
 - Enabled an offline Debug tab for scanned functions and methods.
